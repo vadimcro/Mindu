@@ -1,3 +1,5 @@
+![image](https://github.com/user-attachments/assets/c9956445-9b55-4e18-ac20-7a8bdde93005)
+
 MindU is a lightweight standalone suite for task management & mind maps creation, 
 wrapped around node-based UI. It is a pure and minimalistic solution aimed at 
 individuals, aimed to provide a "quick and dirty" solution for cases where
