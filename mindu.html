@@ -1,0 +1,1615 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MindU - Task Management Mind Map Suite</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+
+    <style>
+        /* --- Global Styles & Resets --- */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            overflow: hidden;
+        }
+	.node.search-highlight {
+   	 box-shadow: 0 0 0 6px rgba(245, 158, 11, 0.6); /* A vibrant orange glow */
+ 	 transform: scale(1.05); /* Slightly enlarge highlighted nodes */
+	}
+
+        /* --- Main Layout Containers --- */
+        .container {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .mindmap {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            cursor: grab;
+        }
+
+        .mindmap.dragging {
+            cursor: grabbing;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        .mindmap.dragging .node {
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        .mindmap-content {
+            transform-origin: 0 0;
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+
+        /* --- SVG Connection Overlay --- */
+        #connections-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            pointer-events: none;
+            z-index: 5;
+        }
+
+        /* --- UI Controls (Top Left) --- */
+        .controls {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 1000;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .control-btn {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            border: none;
+            background: rgba(255, 255, 255, 0.9);
+            color: #374151;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            transition: all 0.2s ease-in-out;
+        }
+
+        .control-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+        }
+
+        .control-btn svg {
+            width: 24px;
+            height: 24px;
+            fill: currentColor;
+        }
+
+ 
+	.add-btn {
+ 	   background: #22c55e; /* A vibrant color to make it a clear call-to-action */
+    	   color: #ffffff; /* White icon for contrast */
+	}
+
+	.add-btn:hover {
+    	    background: #16a34a; /* A slightly darker shade on hover */
+	}
+
+        /* --- Dropdown Menu --- */
+        .menu-wrapper {
+            position: relative;
+            display: inline-block;
+        }
+
+        .dropdown-menu {
+            display: none;
+            position: absolute;
+            top: 60px;
+            left: 0;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+            z-index: 2000;
+            min-width: 170px;
+            padding: 8px 0;
+            animation: fadeIn 0.16s;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .dropdown-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            width: 100%;
+            padding: 12px 24px 12px 20px;
+            background: none;
+            color: #333;
+            font-size: 15px;
+            text-align: left;
+            border: none;
+            cursor: pointer;
+            transition: background 0.15s;
+            white-space: nowrap;
+        }
+
+        .dropdown-item:hover {
+            background: #f3f4f6;
+            color: #4f46e5;
+        }
+
+        /* Legacy file input styles */
+        .file-input input { display: none; }
+        .file-input label {
+            display: inline-block;
+            padding: 8px 16px;
+            background: #4f46e5;
+            color: white;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .file-input label:hover {
+            background: #3730a3;
+            transform: translateY(-2px);
+        }
+
+        /* --- Node Styles --- */
+        .node {
+            position: absolute;
+            min-width: 200px;
+            max-width: 300px;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 15px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
+            border: 2px solid transparent;
+            cursor: move;
+            transition: all 0.3s ease;
+            z-index: 10;
+        }
+
+        .node:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+        }
+
+        .node.selected {
+            border-color: #4f46e5;
+            box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.2);
+        }
+
+        /* Node Type Styles */
+        .node.project {
+            border-left: 6px solid #8b5cf6;
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(255, 255, 255, 0.95));
+        }
+
+        .node.task {
+            border-left: 6px solid #06b6d4;
+            background: linear-gradient(135deg, rgba(6, 182, 212, 0.1), rgba(255, 255, 255, 0.95));
+        }
+
+        .node.subtask {
+            border-left: 6px solid #10b981;
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(255, 255, 255, 0.95));
+        }
+
+        /* Node Priority Background Overrides (must come after type styles) */
+        .node.priority-high {
+            background: linear-gradient(135deg, rgba(239, 68, 68, 0.1), rgba(255, 255, 255, 0.95));
+        }
+
+        .node.priority-medium {
+            background: linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(255, 255, 255, 0.95));
+        }
+
+        .node.priority-low {
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(255, 255, 255, 0.95));
+        }
+
+        /* Node Content Styles */
+        .node h3 {
+            margin-bottom: 10px;
+            color: #1a1833;
+            font-size: 18px;
+            font-weight: 700;
+        }
+
+        .node p {
+            margin-bottom: 10px;
+            color: #23272f;
+            font-size: 15px;
+            line-height: 1.4;
+        }
+
+        .node .label {
+            color: #374151;
+            font-weight: 600;
+            margin-right: 3px;
+            font-size: 14px;
+            letter-spacing: 0.03em;
+        }
+
+        .node .value {
+            color: #23272f;
+            font-weight: 400;
+            font-size: 15px;
+            letter-spacing: 0.01em;
+        }
+
+        /* Status & Priority Badge Styles */
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .status-not-started { background: #fee2e2; color: #991b1b; }
+        .status-in-progress { background: #fef3c7; color: #92400e; }
+        .status-completed { background: #d1fae5; color: #065f46; }
+        .status-on-hold { background: #e5e7eb; color: #374151; }
+
+        /* Styles for Completed Nodes */
+        .node.status-completed {
+            opacity: 0.75;
+        }
+
+        .node.status-completed:hover {
+            transform: translateY(0);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+
+        .node.status-completed::before {
+            content: '✔';
+            position: absolute;
+            top: -12px;
+            left: -12px;
+            width: 28px;
+            height: 28px;
+            background: #ffffff;
+            border: 2px solid #065f46;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #065f46;
+            font-size: 16px;
+            font-weight: bold;
+            z-index: 11;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
+        }
+
+        /* --- Inline Edit Pop-up Menu --- */
+        .inline-edit-menu {
+            position: absolute;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+            z-index: 1010;
+            padding: 5px;
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+        }
+
+        .menu-item {
+            background: none;
+            border: none;
+            text-align: left;
+            padding: 8px 12px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            width: 100%;
+            transition: background-color 0.15s ease;
+        }
+
+        .menu-item:hover {
+            background-color: #f3f4f6;
+            color: #4f46e5;
+        }
+
+        /* --- On-Hover Quick Actions --- */
+        .quick-actions {
+            position: absolute;
+            bottom: -16px;
+            right: 15px;
+            display: flex;
+            flex-direction: row;
+            gap: 8px;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease-in-out;
+            z-index: 12;
+        }
+
+        .node:hover .quick-actions {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .action-btn {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            background: white;
+            color: #555;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease-in-out;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .action-btn:hover {
+            background: #f0f0f0;
+            color: black;
+            transform: scale(1.1);
+        }
+
+        .action-btn svg {
+            width: 18px;
+            height: 18px;
+            fill: currentColor;
+        }
+
+        /* --- Search and Filter Panels --- */
+        .search-panel {
+            position: absolute;
+            top: -100px; /* Start off-screen */
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 255, 255, 0.95);
+            padding: 10px 15px;
+            border-radius: 10px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            z-index: 1001;
+            transition: top 0.3s ease-in-out;
+        }
+
+        .search-panel.visible {
+            top: 20px; /* Slide into view */
+        }
+
+        #searchInput {
+            width: 250px;
+            border: 2px solid #e5e7eb;
+            padding: 8px;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        #closeSearchBtn {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #6b7280;
+        }
+
+        .filter-panel {
+            position: absolute;
+            bottom: 80px;
+            right: 20px;
+            background: white;
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 8px 40px rgba(0, 0, 0, 0.2);
+            z-index: 1001;
+            width: 280px;
+            display: none; /* Hidden by default */
+        }
+
+        .filter-panel h4 {
+            margin-bottom: 15px;
+        }
+
+        .zoom-btn.active {
+            background-color: #667eea;
+            color: white;
+        }
+
+        .container .node.filtered-out {
+            opacity: 0.15 !important;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+
+        /* --- Edit Form & Overlay --- */
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 999;
+        }
+
+        .edit-form {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            z-index: 1000;
+            min-width: 400px;
+            max-width: 500px;
+        }
+
+        .edit-form h3 {
+            margin-bottom: 20px;
+            color: #1f2937;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #374151;
+            font-weight: 500;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #4f46e5;
+        }
+
+        .form-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 20px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary {
+            background: #4f46e5;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #3730a3;
+        }
+
+        .btn-secondary {
+            background: #e5e7eb;
+            color: #374151;
+        }
+
+        .btn-secondary:hover {
+            background: #d1d5db;
+        }
+
+        /* --- Zoom Controls (Bottom Right) --- */
+        .zoom-controls {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            display: flex;
+            gap: 10px;
+            z-index: 1000;
+        }
+
+        .zoom-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: none;
+            background: rgba(255, 255, 255, 0.9);
+            color: #374151;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+
+        .zoom-btn:hover {
+            background: white;
+            transform: scale(1.1);
+        }
+
+        .zoom-btn svg {
+            width: 22px;
+            height: 22px;
+            fill: currentColor;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="controls">
+            <div class="menu-wrapper">
+                <button class="control-btn menu-btn" id="menuBtn" title="Menu">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"></path></svg>
+                </button>
+                <div class="dropdown-menu" id="dropdownMenu">
+                    <label for="csvFile" class="dropdown-item" style="cursor:pointer;">
+                        <span style="font-size:17px; margin-right:8px;">📁</span>
+                        Load CSV
+                    </label>
+                    <input type="file" id="csvFile" accept=".csv" style="display:none;" />
+                    <button class="dropdown-item" id="exportBtn" style="cursor:pointer;">
+                        <span style="font-size:17px; margin-right:8px;">💾</span>
+                        Export CSV
+                    </button>
+                </div>
+            </div>
+            <button class="control-btn add-btn" onclick="addNewTask()" title="Add New Task">
+                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 14h-3v3h-2v-3H8v-2h3v-3h2v3h3v2zm-3-7V3.5L18.5 9H13z"></path></svg>
+            </button>
+        </div>
+
+        <div class="mindmap" id="mindmap">
+            <div class="mindmap-content" id="mindmapContent">
+                <!-- Nodes and SVG connections will be added here -->
+            </div>
+        </div>
+
+        <div class="zoom-controls">
+            <button class="zoom-btn" id="searchBtn" title="Search">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"></path></svg>
+            </button>
+            <button class="zoom-btn" id="filterBtn" title="Filter">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 4h18v2.85L14 14v6l-4 3v-9L3 6.85V4z"></path></svg>
+            </button>
+            <button class="zoom-btn" onclick="zoomIn()">+</button>
+            <button class="zoom-btn" onclick="zoomOut()">−</button>
+            <button class="zoom-btn" onclick="fitAllNodesToView()" title="Fit all nodes to view">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"></path></svg>
+            </button>
+        </div>
+    </div>
+
+    <div id="search-bar" class="search-panel">
+        <input type="text" id="searchInput" placeholder="Find task by name..." />
+        <button id="closeSearchBtn">×</button>
+    </div>
+
+    <div id="filter-panel" class="filter-panel">
+        <h4>Filter Nodes</h4>
+        <div class="form-group">
+            <label for="statusFilter">Status:</label>
+            <select id="statusFilter">
+                <option value="all">All</option>
+                <option value="not-started">Not Started</option>
+                <option value="in-progress">In Progress</option>
+                <option value="completed">Completed</option>
+                <option value="on-hold">On Hold</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="priorityFilter">Priority:</label>
+            <select id="priorityFilter">
+                <option value="all">All</option>
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
+            </select>
+        </div>
+        <div class="form-buttons">
+            <button class="btn btn-secondary" id="clearFilterBtn">Clear</button>
+            <button class="btn btn-primary" id="applyFilterBtn">Apply</button>
+        </div>
+    </div>
+
+    <script>
+        // --- Global State Variables ---
+        let tasks = [];
+        let nodePositions = {};
+        let currentZoom = 1;
+        let panX = 0;
+        let panY = 0;
+        let isPanning = false;
+        let isDraggingNode = false;
+        let dragStart = { x: 0, y: 0 };
+        let selectedNode = null;
+        let draggedNode = null;
+        let undoStack = [];
+        let redoStack = [];
+	let searchMatches = [];
+	let currentMatchIndex = 0;
+
+        const statusOptions = ['not-started', 'in-progress', 'on-hold', 'completed'];
+        const priorityOptions = ['low', 'medium', 'high'];
+   	let isDataDirty = false; // Track unsaved changes
+
+	// --- Wrap original functions to track changes ---
+        	const originalSaveState = saveState;
+        	saveState = function() {
+            	originalSaveState();
+            	isDataDirty = false;  // Data is now clean 
+	};
+        
+        	const originalPushUndo = pushUndo;
+        	pushUndo = function() {
+            	originalPushUndo();
+            	isDataDirty = true; // A change was made
+       	};
+
+        // --- DOM Element References ---
+        const mindmap = document.getElementById('mindmap');
+        const mindmapContent = document.getElementById('mindmapContent');
+
+        // --- Sample Data (for initial load if localStorage is empty) ---
+        const sampleData = [];
+
+        // --- Undo/Redo System ---
+        function pushUndo() {
+            undoStack.push({
+                tasks: JSON.parse(JSON.stringify(tasks)),
+                nodePositions: JSON.parse(JSON.stringify(nodePositions)),
+                panX,
+                panY,
+                currentZoom
+            });
+            if (undoStack.length > 50) undoStack.shift();
+            redoStack = []; // Clear redo stack on a new action
+        }
+
+        function undo() {
+            if (undoStack.length === 0) return;
+            redoStack.push({
+                tasks: JSON.parse(JSON.stringify(tasks)),
+                nodePositions: JSON.parse(JSON.stringify(nodePositions)),
+                panX,
+                panY,
+                currentZoom
+            });
+            const lastState = undoStack.pop();
+            tasks = lastState.tasks;
+            nodePositions = lastState.nodePositions;
+            panX = lastState.panX;
+            panY = lastState.panY;
+            currentZoom = lastState.currentZoom;
+            updateTransform();
+            renderMindMap();
+            saveState();
+        }
+
+        function redo() {
+            if (redoStack.length === 0) return;
+            pushUndo(); // The current state becomes the new "undo" state
+            const nextState = redoStack.pop();
+            tasks = nextState.tasks;
+            nodePositions = nextState.nodePositions;
+            panX = nextState.panX;
+            panY = nextState.panY;
+            currentZoom = nextState.currentZoom;
+            updateTransform();
+            renderMindMap();
+            saveState();
+        }
+
+        // --- Local Storage Persistence ---
+        function saveState() {
+            const state = {
+                tasks: tasks,
+                nodePositions: nodePositions,
+                panX: panX,
+                panY: panY,
+                currentZoom: currentZoom
+            };
+            localStorage.setItem('mindmapState', JSON.stringify(state));
+        }
+
+        function loadState() {
+            const savedState = localStorage.getItem('mindmapState');
+            if (savedState) {
+                const state = JSON.parse(savedState);
+                tasks = state.tasks || [];
+                nodePositions = state.nodePositions || {};
+                panX = state.panX || 0;
+                panY = state.panY || 0;
+                currentZoom = state.currentZoom || 1;
+            } else {
+                tasks = [...sampleData];
+                nodePositions = {}; // Start with fresh positions for sample data
+            }
+        }
+
+        // --- CSV Import/Export ---
+        function exportToCSV() {
+            const exportTasks = tasks.map(t => {
+                const pos = nodePositions[t.id] || { x: '', y: '' };
+                return { ...t, x: pos.x, y: pos.y };
+            });
+            // Embed pan/zoom info as a special row
+            exportTasks.push({ id: '__meta__', panX, panY, zoom: currentZoom });
+            const csv = Papa.unparse(exportTasks);
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'tasks.csv';
+            a.click();
+            window.URL.revokeObjectURL(url);
+        }
+
+        document.getElementById('csvFile').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                Papa.parse(file, {
+                    header: true,
+                    complete: function(results) {
+                        const meta = results.data.find(row => row.id === '__meta__');
+                        tasks = results.data.filter(row => row.id && row.id !== '__meta__' && row.name);
+                        nodePositions = {};
+                        tasks.forEach(t => {
+                            if (t.x !== undefined && t.y !== undefined && t.x !== '' && t.y !== '') {
+                                nodePositions[t.id] = { x: parseFloat(t.x), y: parseFloat(t.y) };
+                            }
+                        });
+
+                        if (meta) {
+                            panX = Number(meta.panX) || 0;
+                            panY = Number(meta.panY) || 0;
+                            currentZoom = Number(meta.zoom) || 1;
+                        } else {
+                            panX = 0;
+                            panY = 0;
+                            currentZoom = 1;
+                        }
+                        updateTransform();
+                        renderMindMap();
+                        saveState();
+                    }
+                });
+            }
+        });
+
+   // MindMap rendering
+    function renderMindMap() 
+	{
+  	  mindmapContent.innerHTML = '';
+	    if (Object.keys(nodePositions).length === 0 && tasks.length > 0) {
+	        autoLayoutNodes();	
+	    }
+	    tasks.forEach(task => {
+	        const node = createNode(task);
+	        mindmapContent.appendChild(node);
+	    });
+
+    // For all updates *after* the initial load, we draw connections immediately.
+    // The special initial load logic is now handled at the bottom of the script.
+
+	    requestAnimationFrame(drawConnections);
+	}
+
+        function createNode(task) {
+            const node = document.createElement('div');
+            const statusClass = `status-${task.status.replace(/\s+/g, '-')}`;
+            node.className = `node ${task.type} priority-${task.priority} ${statusClass}`;
+            node.id = `node-${task.id}`;
+
+            // Set node position
+            if (!nodePositions[task.id]) {
+                autoLayoutNodes(); // This is a fallback
+            }
+            const pos = nodePositions[task.id];
+            node.style.left = pos.x + 'px';
+            node.style.top = pos.y + 'px';
+
+            const deadlineDate = task.deadline ? new Date(task.deadline).toLocaleDateString() : 'No deadline';
+
+            node.innerHTML = `
+                <h3>${task.name}</h3>
+                <p><span class="label">Type:</span> <span class="value">${task.type}</span></p>
+                <p><span class="label">Status:</span> <span class="status-badge ${statusClass}" style="cursor: pointer;">${task.status}</span></p>
+                <p><span class="label">Priority:</span> <span class="priority-value value" style="cursor: pointer;">${task.priority}</span></p>
+                <p><span class="label">Deadline:</span> <span class="value">${deadlineDate}</span></p>
+                ${task.description ? `<p><span class="label">Description:</span> <span class="value">${task.description}</span></p>` : ''}
+                
+                <div class="quick-actions">
+                    <button class="action-btn action-complete" title="Toggle Complete">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z"></path></svg>
+                    </button>
+                    <button class="action-btn action-delete" title="Delete Task">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"></path></svg>
+                    </button>
+                </div>
+            `;
+
+            // --- Event Listeners for the Node ---
+            node.addEventListener('mousedown', (e) => { e.preventDefault(); pushUndo(); handleNodeMouseDown(e, node, task); });
+            node.addEventListener('click', (e) => { e.stopPropagation(); selectNode(node, task); });
+            node.addEventListener('dblclick', (e) => { e.stopPropagation(); editTask(task); });
+
+            // Inline Title Edit
+            const titleElement = node.querySelector('h3');
+            titleElement.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (titleElement.isContentEditable) return;
+
+                const originalText = task.name;
+                titleElement.contentEditable = true;
+                titleElement.focus();
+                document.execCommand('selectAll', false, null);
+
+                const saveChanges = () => {
+                    titleElement.contentEditable = false;
+                    const newText = titleElement.innerText.trim();
+
+                    if (newText && newText !== originalText) {
+                        pushUndo();
+                        task.name = newText;
+                        saveState();
+                    } else {
+                        titleElement.innerText = originalText;
+                    }
+                    titleElement.removeEventListener('blur', saveChanges);
+                    titleElement.removeEventListener('keydown', handleKeydown);
+                };
+
+                const handleKeydown = (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        saveChanges();
+                    } else if (e.key === 'Escape') {
+                        titleElement.innerText = originalText;
+                        saveChanges();
+                    }
+                };
+
+                titleElement.addEventListener('blur', saveChanges);
+                titleElement.addEventListener('keydown', handleKeydown);
+            });
+
+            // Quick Actions: Complete & Delete
+            node.querySelector('.action-complete').addEventListener('click', (e) => {
+                e.stopPropagation();
+                pushUndo();
+                task.status = (task.status === 'completed') ? 'in-progress' : 'completed';
+                saveState();
+                renderMindMap();
+            });
+            node.querySelector('.action-delete').addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (confirm('Are you sure you want to delete this task?')) {
+                    pushUndo();
+                    tasks = tasks.filter(t => t.id !== task.id);
+                    delete nodePositions[task.id];
+                    saveState();
+                    renderMindMap();
+                }
+            });
+
+            // Click-to-Change: Status & Priority
+            node.querySelector('.status-badge').addEventListener('click', (e) => {
+                e.stopPropagation();
+                showInlineMenu(e.target, statusOptions, task, 'status');
+            });
+            node.querySelector('.priority-value').addEventListener('click', (e) => {
+                e.stopPropagation();
+                showInlineMenu(e.target, priorityOptions, task, 'priority');
+            });
+
+            return node;
+        }
+
+        function drawConnections() {
+            let svgOverlay = document.getElementById('connections-container');
+            if (!svgOverlay) {
+                svgOverlay = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                svgOverlay.setAttribute('id', 'connections-container');
+                svgOverlay.style.position = 'fixed';
+                svgOverlay.style.top = '0';
+                svgOverlay.style.left = '0';
+                svgOverlay.style.width = '100vw';
+                svgOverlay.style.height = '100vh';
+                svgOverlay.style.pointerEvents = 'none';
+                svgOverlay.style.zIndex = '2';
+                document.body.insertBefore(svgOverlay, document.body.firstChild);
+            }
+
+            svgOverlay.innerHTML = ''; // Clear previous lines
+
+            tasks.forEach(child => {
+                if (child.parent_id) {
+                    const parent = tasks.find(t => t.id == child.parent_id);
+                    if (parent) {
+                        const parentNode = document.getElementById(`node-${parent.id}`);
+                        const childNode = document.getElementById(`node-${child.id}`);
+                        const fromPos = nodePositions[parent.id];
+                        const toPos = nodePositions[child.id];
+
+                        if (!parentNode || !childNode || !fromPos || !toPos) return;
+
+                        // Calculate spline control points for a smooth horizontal curve
+                        const x1 = fromPos.x + parentNode.offsetWidth;
+                        const y1 = fromPos.y + parentNode.offsetHeight / 2;
+                        const x2 = toPos.x;
+                        const y2 = toPos.y + childNode.offsetHeight / 2;
+
+                        const controlOffset = Math.abs(x2 - x1) * 0.5;
+                        const cx1 = x1 + controlOffset;
+                        const cy1 = y1;
+                        const cx2 = x2 - controlOffset;
+                        const cy2 = y2;
+
+                        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                        path.setAttribute('d', `M ${x1} ${y1} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${x2} ${y2}`);
+                        path.setAttribute('fill', 'none');
+                        path.setAttribute('stroke', '#2d2d6a');
+                        path.setAttribute('stroke-width', 2 / currentZoom);
+                        path.setAttribute('stroke-dasharray', `${14 / currentZoom},${7 / currentZoom}`);
+                        svgOverlay.appendChild(path);
+                    }
+                }
+            });
+        }
+
+        // --- Auto-Layout & Node Helpers ---
+        function autoLayoutNodes() {
+            const nodeSize = { width: 220, height: 140 };
+            const margin = 30;
+            tasks.forEach((task) => {
+                if (!nodePositions[task.id]) {
+                    const level = getNodeLevel(task);
+                    const siblings = getSiblings(task);
+                    const siblingIndex = siblings.indexOf(task);
+                    let x = level * (nodeSize.width + 80) + 100;
+                    let y = siblingIndex * (nodeSize.height + margin) + 100 + (level * 30);
+                    
+                    // Simple collision avoidance
+                    let tries = 0;
+                    while (Object.values(nodePositions).some(pos =>
+                        Math.abs(pos.x - x) < nodeSize.width && Math.abs(pos.y - y) < nodeSize.height
+                    ) && tries < 50) {
+                        y += nodeSize.height + margin;
+                        tries++;
+                    }
+                    nodePositions[task.id] = { x, y };
+                }
+            });
+        }
+
+        function getNodeLevel(task) {
+            if (!task.parent_id) return 0;
+            const parent = tasks.find(t => t.id == task.parent_id);
+            return parent ? getNodeLevel(parent) + 1 : 0;
+        }
+
+        function getSiblings(task) {
+            return tasks.filter(t => t.parent_id === task.parent_id);
+        }
+
+        // --- UI Interactions & Forms ---
+        function selectNode(node, task) {
+            document.querySelectorAll('.node.selected').forEach(n => n.classList.remove('selected'));
+            node.classList.add('selected');
+            selectedNode = { node, task };
+        }
+
+        function showInlineMenu(targetElement, options, task, propertyToChange) {
+            document.querySelectorAll('.inline-edit-menu').forEach(menu => menu.remove());
+            const menu = document.createElement('div');
+            menu.className = 'inline-edit-menu';
+
+            options.forEach(option => {
+                const button = document.createElement('button');
+                button.className = 'menu-item';
+                button.textContent = option.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                button.addEventListener('click', () => {
+                    pushUndo();
+                    task[propertyToChange] = option;
+                    saveState();
+                    renderMindMap();
+                    menu.remove();
+                });
+                menu.appendChild(button);
+            });
+
+            const rect = targetElement.getBoundingClientRect();
+            document.body.appendChild(menu);
+            menu.style.left = `${rect.left}px`;
+            menu.style.top = `${rect.bottom + 5}px`;
+
+            // Close menu when clicking away
+            setTimeout(() => {
+                document.addEventListener('click', function closeMenu(e) {
+                    if (!menu.contains(e.target)) {
+                        menu.remove();
+                        document.removeEventListener('click', closeMenu);
+                    }
+                });
+            }, 0);
+        }
+
+        function addNewTask() {
+            pushUndo();
+            const newId = (tasks.length > 0 ? Math.max(...tasks.map(t => parseInt(t.id))) : 0) + 1;
+            const newTask = {
+                id: newId,
+                name: 'New Task',
+                type: 'task',
+                status: 'not-started',
+                priority: 'medium',
+                deadline: '',
+                parent_id: '',
+                description: ''
+            };
+            // Place new task in a relatively central, random position
+            const x = ((-panX + mindmap.clientWidth / 2) / currentZoom) + (Math.random() - 0.5) * 100;
+            const y = ((-panY + mindmap.clientHeight / 2) / currentZoom) + (Math.random() - 0.5) * 100;
+            nodePositions[newId] = { x, y };
+            tasks.push(newTask);
+            renderMindMap();
+            setTimeout(() => editTask(newTask, true), 100);
+        }
+
+        function editTask(task, isNew = false) {
+            showEditForm(task, isNew);
+        }
+
+        function showEditForm(task, isNew = false) {
+            const overlay = document.createElement('div');
+            overlay.className = 'overlay';
+            const form = document.createElement('div');
+            form.className = 'edit-form';
+            const cancelAction = isNew ? 'undoAndClose()' : 'closeEditForm()';
+
+            form.innerHTML = `
+                <h3>${isNew ? 'Create New Task' : 'Edit Task'}</h3>
+                <div class="form-group">
+                    <label for="taskName">Name:</label>
+                    <input type="text" id="taskName" value="${task.name}" />
+                </div>
+                <div class="form-group">
+                    <label for="taskType">Type:</label>
+                    <select id="taskType">
+                        <option value="project" ${task.type === 'project' ? 'selected' : ''}>Project</option>
+                        <option value="task" ${task.type === 'task' ? 'selected' : ''}>Task</option>
+                        <option value="subtask" ${task.type === 'subtask' ? 'selected' : ''}>Subtask</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="taskStatus">Status:</label>
+                    <select id="taskStatus">
+                        <option value="not-started" ${task.status === 'not-started' ? 'selected' : ''}>Not Started</option>
+                        <option value="in-progress" ${task.status === 'in-progress' ? 'selected' : ''}>In Progress</option>
+                        <option value="completed" ${task.status === 'completed' ? 'selected' : ''}>Completed</option>
+                        <option value="on-hold" ${task.status === 'on-hold' ? 'selected' : ''}>On Hold</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="taskPriority">Priority:</label>
+                    <select id="taskPriority">
+                        <option value="low" ${task.priority === 'low' ? 'selected' : ''}>Low</option>
+                        <option value="medium" ${task.priority === 'medium' ? 'selected' : ''}>Medium</option>
+                        <option value="high" ${task.priority === 'high' ? 'selected' : ''}>High</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="taskDeadline">Deadline:</label>
+                    <input type="date" id="taskDeadline" value="${task.deadline || ''}" />
+                </div>
+                <div class="form-group">
+                    <label for="taskParent">Parent Task:</label>
+                    <select id="taskParent">
+                        <option value="">None (Root Task)</option>
+                        ${tasks.filter(t => t.id != task.id && t.type !== 'subtask').map(t =>
+                            `<option value="${t.id}" ${task.parent_id == t.id ? 'selected' : ''}>${t.name}</option>`
+                        ).join('')}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="taskDescription">Description: <button type="button" id="rtlToggleBtn" style="margin-left:8px; font-size:13px;">RTL</button></label>
+                    <textarea id="taskDescription" rows="3">${task.description || ''}</textarea>
+                </div>
+                <div class="form-buttons">
+                    <button class="btn btn-secondary" onclick="${cancelAction}">Cancel</button>
+                    <button class="btn btn-primary" onclick="saveTask(${task.id})">Save</button>
+                </div>
+            `;
+            overlay.appendChild(form);
+            document.body.appendChild(overlay);
+
+            // Add event listeners after appending to DOM
+            overlay.addEventListener('click', (e) => {
+                if (e.target === overlay) {
+                    isNew ? undoAndClose() : closeEditForm();
+                }
+            });
+            document.getElementById('rtlToggleBtn').addEventListener('click', function() {
+                const desc = document.getElementById('taskDescription');
+                desc.dir = (desc.dir === "rtl") ? "ltr" : "rtl";
+                desc.style.textAlign = (desc.dir === "rtl") ? "right" : "left";
+                this.innerText = (desc.dir === "rtl") ? "LTR" : "RTL";
+            });
+        }
+
+        function undoAndClose() {
+            undo();
+            closeEditForm();
+        }
+
+        function closeEditForm() {
+            document.querySelector('.overlay')?.remove();
+        }
+
+        function saveTask(taskId) {
+            pushUndo();
+            const task = tasks.find(t => t.id == taskId);
+            if (task) {
+                task.name = document.getElementById('taskName').value;
+                task.type = document.getElementById('taskType').value;
+                task.status = document.getElementById('taskStatus').value;
+                task.priority = document.getElementById('taskPriority').value;
+                task.deadline = document.getElementById('taskDeadline').value;
+                task.parent_id = document.getElementById('taskParent').value;
+                task.description = document.getElementById('taskDescription').value;
+                renderMindMap();
+                closeEditForm();
+                saveState();
+            }
+        }
+
+        // --- Mouse & Pan/Zoom Event Handlers ---
+        function handleNodeMouseDown(e, node, task) {
+            e.stopPropagation();
+            isDraggingNode = true;
+            draggedNode = { node, task };
+            const rect = node.getBoundingClientRect();
+            const containerRect = mindmapContent.getBoundingClientRect();
+            dragStart.x = (e.clientX - rect.left) / currentZoom;
+            dragStart.y = (e.clientY - rect.top) / currentZoom;
+            node.style.cursor = 'grabbing';
+            document.body.style.cursor = 'grabbing';
+            selectNode(node, task);
+        }
+
+        mindmap.addEventListener('mousedown', (e) => {
+            if (e.target === mindmap || e.target === mindmapContent) {
+                pushUndo();
+                isPanning = true;
+                dragStart.x = e.clientX - panX;
+                dragStart.y = e.clientY - panY;
+                mindmap.classList.add('dragging');
+            }
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (isDraggingNode && draggedNode) {
+                e.preventDefault();
+                const containerRect = mindmapContent.getBoundingClientRect();
+                const newX = (e.clientX - containerRect.left) / currentZoom - dragStart.x;
+                const newY = (e.clientY - containerRect.top) / currentZoom - dragStart.y;
+
+                draggedNode.node.style.left = newX + 'px';
+                draggedNode.node.style.top = newY + 'px';
+                nodePositions[draggedNode.task.id] = { x: newX, y: newY };
+                drawConnections();
+
+            } else if (isPanning) {
+                panX = e.clientX - dragStart.x;
+                panY = e.clientY - dragStart.y;
+                updateTransform();
+            }
+        });
+
+        document.addEventListener('mouseup', () => {
+            if (isDraggingNode) {
+                isDraggingNode = false;
+                if (draggedNode) {
+                    draggedNode.node.style.cursor = 'move';
+                    draggedNode = null;
+                    saveState();
+                }
+                document.body.style.cursor = 'default';
+            }
+            if (isPanning) {
+                isPanning = false;
+                mindmap.classList.remove('dragging');
+                saveState();
+            }
+        });
+
+        mindmap.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            pushUndo();
+            const rect = mindmap.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            const pointX = (mouseX - panX) / currentZoom;
+            const pointY = (mouseY - panY) / currentZoom;
+            const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
+            const newZoom = Math.min(Math.max(currentZoom * zoomFactor, 0.2), 5);
+            panX = mouseX - pointX * newZoom;
+            panY = mouseY - pointY * newZoom;
+            currentZoom = newZoom;
+            updateTransform();
+        });
+
+        function updateTransform() {
+            mindmapContent.style.transform = `translate(${panX}px, ${panY}px) scale(${currentZoom})`;
+            const svgOverlay = document.getElementById('connections-container');
+            if (svgOverlay) {
+                const viewBoxX = -panX / currentZoom;
+                const viewBoxY = -panY / currentZoom;
+                const viewBoxWidth = mindmap.clientWidth / currentZoom;
+                const viewBoxHeight = mindmap.clientHeight / currentZoom;
+                svgOverlay.setAttribute('viewBox', `${viewBoxX} ${viewBoxY} ${viewBoxWidth} ${viewBoxHeight}`);
+            }
+        }
+
+        function zoomIn() { pushUndo(); currentZoom = Math.min(currentZoom * 1.2, 5); updateTransform(); saveState(); }
+        function zoomOut() { pushUndo(); currentZoom = Math.max(currentZoom / 1.2, 0.2); updateTransform(); saveState(); }
+        function resetZoom() { pushUndo(); currentZoom = 1; panX = 0; panY = 0; updateTransform(); saveState(); }
+        
+        /**
+         * Calculates the bounding box of all visible nodes and adjusts the zoom and pan
+         * to fit them all within the viewport.
+         */
+        function fitAllNodesToView() {
+            if (tasks.length === 0) {
+                resetZoom(); // Fallback to default reset if no nodes
+                return;
+            }
+
+            pushUndo();
+
+            let minX = Infinity;
+            let minY = Infinity;
+            let maxX = -Infinity;
+            let maxY = -Infinity;
+
+            // Find the bounding box of all visible nodes
+            tasks.forEach(task => {
+                const nodeElement = document.getElementById(`node-${task.id}`);
+                const pos = nodePositions[task.id];
+                // Ensure the node is actually in the DOM, has a position, and is not filtered out
+                if (nodeElement && pos && !nodeElement.classList.contains('filtered-out')) {
+                    minX = Math.min(minX, pos.x);
+                    minY = Math.min(minY, pos.y);
+                    maxX = Math.max(maxX, pos.x + nodeElement.offsetWidth);
+                    maxY = Math.max(maxY, pos.y + nodeElement.offsetHeight);
+                }
+            });
+
+            // If no nodes were found (e.g., all are filtered out), reset the view
+            if (minX === Infinity) {
+                resetZoom();
+                return;
+            }
+
+            const bboxWidth = maxX - minX;
+            const bboxHeight = maxY - minY;
+            const containerWidth = mindmap.clientWidth;
+            const containerHeight = mindmap.clientHeight;
+
+            // Add some padding around the nodes
+            const padding = 80;
+
+            // Calculate the required zoom to fit the content
+            const zoomX = (containerWidth - padding) / bboxWidth;
+            const zoomY = (containerHeight - padding) / bboxHeight;
+            // Use the smaller zoom level to ensure everything fits, and cap it at 200%
+            const newZoom = Math.min(zoomX, zoomY, 2);
+
+            // Calculate the center of the bounding box
+            const bboxCenterX = minX + bboxWidth / 2;
+            const bboxCenterY = minY + bboxHeight / 2;
+
+            // Calculate the new pan values to center the content
+            const newPanX = (containerWidth / 2) - (bboxCenterX * newZoom);
+            const newPanY = (containerHeight / 2) - (bboxCenterY * newZoom);
+
+            // Apply the new transformation
+            currentZoom = newZoom;
+            panX = newPanX;
+            panY = newPanY;
+
+            updateTransform();
+            saveState(); // Save the new view state
+        }
+
+
+        // --- Keyboard Shortcut Handlers ---
+document.addEventListener('keydown', (e) => {
+    // Handle Undo and Redo
+    if (e.ctrlKey && e.key === 'z') { e.preventDefault(); undo(); }
+    if (e.ctrlKey && (e.key === 'y' || (e.shiftKey && e.key.toLowerCase() === 'z'))) { e.preventDefault(); redo(); }
+
+    // Handle Delete key for selected nodes
+    if (e.key === 'Delete' && selectedNode) {
+        if (confirm('Are you sure you want to delete this task?')) {
+            pushUndo();
+            tasks = tasks.filter(t => t.id !== selectedNode.task.id);
+            delete nodePositions[selectedNode.task.id];
+            renderMindMap();
+            selectedNode = null;
+            saveState();
+        }
+    }
+
+    // Handle Escape key for closing modals
+    if (e.key === 'Escape') {
+        // Prioritize closing the search bar if it's visible
+        if (searchBar.classList.contains('visible')) {
+            searchBar.classList.remove('visible');
+            clearSearchHighlights();
+        } else {
+            // Otherwise, close the main edit form if it's open
+            closeEditForm();
+        }
+    }
+});
+
+         // --- Search and Filter UI Logic ---
+
+        const searchBtn = document.getElementById('searchBtn');
+        const searchBar = document.getElementById('search-bar');
+        const searchInput = document.getElementById('searchInput');
+        const closeSearchBtn = document.getElementById('closeSearchBtn');
+        const filterBtn = document.getElementById('filterBtn');
+        const filterPanel = document.getElementById('filter-panel');
+        const applyFilterBtn = document.getElementById('applyFilterBtn');
+        const clearFilterBtn = document.getElementById('clearFilterBtn');
+        const statusFilter = document.getElementById('statusFilter');
+        const priorityFilter = document.getElementById('priorityFilter');
+
+        function clearSearchHighlights() {
+            document.querySelectorAll('.node.search-highlight').forEach(n => n.classList.remove('search-highlight'));
+            searchMatches = [];
+            currentMatchIndex = 0;
+        }
+
+        function focusOnSearchResult(index) {
+            if (searchMatches.length === 0) return;
+
+            const taskId = searchMatches[index];
+            const nodeElement = document.getElementById(`node-${taskId}`);
+            const nodePos = nodePositions[taskId];
+
+            if (!nodeElement || !nodePos) return;
+
+            // Center view on the found node
+            currentZoom = 1.1; // A comfortable zoom level for viewing
+            panX = (mindmap.clientWidth / 2) - (nodePos.x * currentZoom) - (nodeElement.offsetWidth / 2 * currentZoom);
+            panY = (mindmap.clientHeight / 2) - (nodePos.y * currentZoom) - (nodeElement.offsetHeight / 2 * currentZoom);
+            
+            updateTransform();
+            selectNode(nodeElement, tasks.find(t => t.id == taskId));
+        }
+
+        searchBtn.addEventListener('click', () => {
+            searchBar.classList.toggle('visible');
+            if (searchBar.classList.contains('visible')) {
+                searchInput.focus();
+            } else {
+                clearSearchHighlights(); // Clear highlights when closing the bar
+            }
+        });
+
+        closeSearchBtn.addEventListener('click', () => {
+            searchBar.classList.remove('visible');
+            clearSearchHighlights(); // Clear highlights when closing the bar
+        });
+
+        searchInput.addEventListener('input', (e) => {
+            const query = e.target.value.toLowerCase().trim();
+            
+            // Clear previous highlights and results
+            clearSearchHighlights();
+            document.querySelectorAll('.node.selected').forEach(n => n.classList.remove('selected'));
+
+
+            if (!query) return;
+
+            // Find all matches
+            searchMatches = tasks
+                .filter(t => t.name.toLowerCase().includes(query))
+                .map(t => t.id);
+
+            if (searchMatches.length > 0) {
+                // Highlight all matched nodes
+                searchMatches.forEach(taskId => {
+                    const node = document.getElementById(`node-${taskId}`);
+                    if (node) node.classList.add('search-highlight');
+                });
+
+                // Focus on the first match
+                currentMatchIndex = 0;
+                focusOnSearchResult(currentMatchIndex);
+            }
+        });
+
+        searchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault(); // Stop form submission or other default actions
+                if (searchMatches.length > 1) {
+                    // Cycle to the next match
+                    currentMatchIndex = (currentMatchIndex + 1) % searchMatches.length;
+                    focusOnSearchResult(currentMatchIndex);
+                }
+            }
+        });
+
+
+        // --- Filter Functionality ---
+
+        filterBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            filterPanel.style.display = filterPanel.style.display === 'block' ? 'none' : 'block';
+        });
+
+        applyFilterBtn.addEventListener('click', () => {
+            const status = statusFilter.value;
+            const priority = priorityFilter.value;
+
+            tasks.forEach(task => {
+                const node = document.getElementById(`node-${task.id}`);
+                if (!node) return;
+                const statusMatch = (status === 'all') || (task.status === status);
+                const priorityMatch = (priority === 'all') || (task.priority === priority);
+
+                node.classList.toggle('filtered-out', !(statusMatch && priorityMatch));
+            });
+            filterBtn.classList.toggle('active', !(status === 'all' && priority === 'all'));
+            filterPanel.style.display = 'none';
+        });
+
+        clearFilterBtn.addEventListener('click', () => {
+            document.querySelectorAll('.node.filtered-out').forEach(node => {
+                node.classList.remove('filtered-out');
+            });
+            statusFilter.value = 'all';
+            priorityFilter.value = 'all';
+            filterBtn.classList.remove('active');
+            filterPanel.style.display = 'none';
+        });
+
+        // --- Menu and Global Click Handlers ---
+
+        const menuBtn = document.getElementById('menuBtn');
+        const dropdownMenu = document.getElementById('dropdownMenu');
+
+        menuBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            dropdownMenu.style.display = dropdownMenu.style.display === 'block' ? 'none' : 'block';
+        });
+
+        document.querySelector('label[for="csvFile"]').addEventListener('click', (e) => {
+            e.stopPropagation();
+            document.getElementById('csvFile').click();
+            dropdownMenu.style.display = 'none';
+        });
+
+        document.getElementById('exportBtn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            exportToCSV();
+            dropdownMenu.style.display = 'none';
+        });
+
+        document.addEventListener('click', (e) => {
+            // Close dropdown menu if clicking outside
+            if (!menuBtn.contains(e.target)) {
+                dropdownMenu.style.display = 'none';
+            }
+            // Close filter panel if clicking outside
+            if (!filterPanel.contains(e.target) && !filterBtn.contains(e.target)) {
+                filterPanel.style.display = 'none';
+            }
+        });
+
+	  // Warn user before leaving if there are unsaved changes
+        	window.addEventListener('beforeunload', (e) => 
+	{
+	            if (isDataDirty) 
+	{
+                			// This message is not shown in most modern browsers, but it's required to trigger the prompt.
+                		const message = "You have unsaved changes. Are you sure you want to leave?";
+                		e.preventDefault(); // This is required for Chrome
+                		e.returnValue = message; // This is required for older browsers
+                		return message;
+            	}
+        	});
+
+         // --- Application Initialization and Event Listeners ---
+
+	// --- Application Initialization and Event Listeners ---
+        
+        // Initial setup
+        loadState();
+        updateTransform();
+        
+        // 1. First, render the nodes so they exist in the DOM.
+        // We temporarily override renderMindMap to *only* draw nodes, not connections.
+        const originalRender = renderMindMap;
+        renderMindMap = function() {
+            mindmapContent.innerHTML = '';
+            if (Object.keys(nodePositions).length === 0 && tasks.length > 0) {
+                autoLayoutNodes();
+            }
+            tasks.forEach(task => {
+                const node = createNode(task);
+                mindmapContent.appendChild(node);
+            });
+        };
+        renderMindMap();
+        renderMindMap = originalRender; // Restore the original function for future use
+
+        // 2. Use requestAnimationFrame to ensure the browser is ready to calculate layout.
+        requestAnimationFrame(() => {
+            // 3. Force the browser to calculate the layout NOW by reading a dimension.
+            // This is the key step to prevent the race condition.
+            mindmapContent.offsetHeight; 
+
+            // 4. Now that layout is guaranteed, fit the view and draw the connections.
+            fitAllNodesToView();
+            drawConnections();
+        });
+
+        isDataDirty = false; // Start with a clean state after initial load
+
+           </script>
+</body>
+</html>
